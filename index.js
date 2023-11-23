@@ -33,6 +33,7 @@ async function run() {
     const menuCollection = client.db('bistroBoss').collection('menu');
     const reviewsCollection = client.db('bistroBoss').collection('reviews');
     const cartCollection = client.db('bistroBoss').collection('carts');
+    const paymentCollection = client.db('bistroBoss').collection('payments');
 
     // JWT RELATED API
 
@@ -204,8 +205,7 @@ async function run() {
     // Payment Intent
     app.post('/create-payment-intent', async (req, res) => {
       const {price} = req.body;
-      const amount = parseFloat(price * 100);
-      console.log(amount);
+      const amount = price * 100
       
       const paymentIntent = await stripe.paymentIntents.create({
         amount: amount,
@@ -219,6 +219,27 @@ async function run() {
 
     });
 
+    // Payment related API
+    app.get('/payments/:email', verifyToken, async (req, res) => {
+      const query = {email: req.params.email};
+      if(req.params.email !== req.decoded.email){
+        return res.status(403).send({message: 'forbidden access'});
+      }
+      const result = await paymentCollection.find(query).toArray();
+      res.send(result);
+    })
+    
+    app.post('/payments', async (req, res) => {
+      const payment = req.body;
+      const result = await paymentCollection.insertOne(payment);
+      const query = {_id: {
+        $in: payment.cartIds.map(id => new ObjectId(id))
+      }}
+
+      const deleteResult = await cartCollection.deleteMany(query);
+      res.send({result, deleteResult});
+    });
+    
     // Send a ping to confirm a successful connection
     await client.db("admin").command({ ping: 1 });
     console.log("Pinged your deployment. You successfully connected to MongoDB!");
